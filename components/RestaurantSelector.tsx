@@ -98,14 +98,15 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
     </button>
   );
 
+  const [recommendedRestaurantId, setRecommendedRestaurantId] = useState<string | null>(null);
+
   const handleRandomSelect = () => {
     if (filteredRestaurants.length === 0) return;
     const randomIndex = Math.floor(Math.random() * filteredRestaurants.length);
     const selected = filteredRestaurants[randomIndex];
-    setRandomlySelectedId(selected.id);
-    onSelectRestaurant(selected);
+    setRecommendedRestaurantId(selected.id);
     
-    // Scroll to the selected restaurant after a short delay
+    // Scroll to the recommended restaurant after a short delay
     setTimeout(() => {
       const element = restaurantButtonRefs.current[selected.id];
       if (element) {
@@ -235,7 +236,7 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
                       title="隨機推薦一家"
                     >
                       <ShuffleIcon className="mr-2 h-5 w-5" />
-                      隨機
+                      隨機推薦
                     </button>
                   )}
                 </div>
@@ -255,8 +256,8 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
                           ? 'cursor-not-allowed opacity-60 border-stone-200' 
                           : 'cursor-pointer border-stone-200 hover:border-stone-300 hover:bg-stone-50/80'
                       } ${
-                        randomlySelectedId === restaurant.id 
-                          ? 'border-2 border-blue-500 bg-blue-50 scale-[1.02] shadow-md' 
+                        recommendedRestaurantId === restaurant.id 
+                          ? 'border-2 border-green-500 bg-green-50 scale-[1.02] shadow-md' 
                           : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50/80'
                       }`}
                     >
