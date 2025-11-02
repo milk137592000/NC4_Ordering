@@ -2,6 +2,7 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { Restaurant, Suggestion } from '../types';
 import { OrderType } from '../types'; // 從 types 引入 OrderType
 import { FoodAndDrinkIcon, DrinkIcon, ShuffleIcon } from './icons'; // 引入圖標
+import NotificationPanel from './NotificationPanel'; // 引入通知面板組件
 
 // 組件的 props 介面
 interface RestaurantSelectorProps {
@@ -28,6 +29,8 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
 }) => {
   const [randomlySelectedId, setRandomlySelectedId] = useState<string | null>(null);
   const [deadlineError, setDeadlineError] = useState<string | null>(null); // 新增：截止時間錯誤訊息狀態
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
   const restaurantButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const filteredRestaurants = useMemo(() => {
@@ -47,6 +50,7 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
   
   useEffect(() => {
     setRandomlySelectedId(null);
+    setSelectedRestaurant(null);
   }, [orderType]);
 
   // 新增：驗證截止時間的函數
@@ -114,6 +118,25 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
         element.focus();
       }
     }, 100);
+  };
+
+  const handleRestaurantSelect = (restaurant: Restaurant) => {
+    if (!deadlineError && deadline) {
+      setSelectedRestaurant(restaurant);
+      onSelectRestaurant(restaurant);
+    }
+  };
+
+  const handleSendNotification = () => {
+    if (!selectedRestaurant || !deadline) return;
+    
+    setIsSendingNotification(true);
+    
+    // 模擬發送通知的過程
+    setTimeout(() => {
+      alert(`已發送 Line 通知給所有成員！\n\n餐廳：${selectedRestaurant.name}\n截止時間：${deadline}`);
+      setIsSendingNotification(false);
+    }, 1500);
   };
 
   return (
@@ -246,11 +269,7 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
                     <button
                       key={restaurant.id}
                       ref={el => restaurantButtonRefs.current[restaurant.id] = el}
-                      onClick={() => {
-                        if (!deadlineError && deadline) {
-                          onSelectRestaurant(restaurant);
-                        }
-                      }}
+                      onClick={() => handleRestaurantSelect(restaurant)}
                       className={`text-left p-4 rounded-lg border transition-all duration-200 transform hover:scale-[1.02] hover:shadow-md ${
                         !deadline || deadlineError 
                           ? 'cursor-not-allowed opacity-60 border-stone-200' 
@@ -266,6 +285,16 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
                     </button>
                   ))}
                 </div>
+                
+                {/* 通知面板 */}
+                {selectedRestaurant && deadline && (
+                  <NotificationPanel 
+                    restaurant={selectedRestaurant}
+                    deadline={deadline}
+                    onSendNotification={handleSendNotification}
+                    isSending={isSendingNotification}
+                  />
+                )}
               </>
             )}
             
