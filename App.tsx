@@ -418,7 +418,18 @@ const App: React.FC = () => {
     const votesSnapshot = await firestore.getDocs(firestore.collection(sessionRef, 'votes'));
     votesSnapshot.forEach(voteDoc => batch.delete(voteDoc.ref));
 
-    batch.update(sessionRef, { proposedRestaurant: null, isProposalRejected: false });
+    // 修改：重置整個 session 而不是僅更新部分字段
+    // 這樣管理員就不再是管理員
+    batch.set(sessionRef, {
+      status: 'ORDERING',
+      admin: null,
+      orderType: null,
+      deadline: '',
+      proposedRestaurant: null,
+      isProposalRejected: false,
+      createdAt: new Date().toISOString(),
+    });
+    
     await batch.commit();
   }, [today, db]);
   
