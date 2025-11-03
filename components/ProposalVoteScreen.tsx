@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { User, Restaurant, Votes, Vote } from '../types';
+import ConfirmAdminModal from './ConfirmAdminModal';
 
 interface ProposalVoteScreenProps {
   currentUser: User;
@@ -8,7 +9,7 @@ interface ProposalVoteScreenProps {
   users: User[];
   votes: Votes;
   onVote: (vote: 'agree' | 'disagree') => void;
-  onCancelProposal: () => void;
+  onCancelProposal: (keepAdmin: boolean) => void;
 }
 
 const ProposalVoteScreen: React.FC<ProposalVoteScreenProps> = ({
@@ -20,6 +21,8 @@ const ProposalVoteScreen: React.FC<ProposalVoteScreenProps> = ({
   onVote,
   onCancelProposal,
 }) => {
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  
   const colleagues = users.filter(u => u.role === 'colleague');
   const currentUserVote = votes[currentUser.id];
   const disagreeCount = Object.values(votes).filter((v: Vote) => v.vote === 'disagree').length;
@@ -29,6 +32,24 @@ const ProposalVoteScreen: React.FC<ProposalVoteScreenProps> = ({
   // 檢查是否達到決策條件
   const isAgreed = agreeCount >= 3;
   const isDisagreed = disagreeCount >= 2;
+
+  const handleCancelProposalClick = () => {
+    if (currentUser.role === 'admin') {
+      setIsConfirmModalOpen(true);
+    } else {
+      onCancelProposal(false);
+    }
+  };
+
+  const handleConfirmContinueAdmin = () => {
+    setIsConfirmModalOpen(false);
+    onCancelProposal(true);
+  };
+
+  const handleCancelContinueAdmin = () => {
+    setIsConfirmModalOpen(false);
+    onCancelProposal(false);
+  };
 
   return (
     <div className="container mx-auto p-4 sm:p-6 lg:p-8">
@@ -110,15 +131,20 @@ const ProposalVoteScreen: React.FC<ProposalVoteScreenProps> = ({
         {currentUser.role === 'admin' && (
            <div className="mt-8 flex justify-center items-center gap-4">
             <button
-              onClick={onCancelProposal}
+              onClick={handleCancelProposalClick}
               className="w-full sm:w-auto border border-stone-400 hover:bg-stone-100 text-stone-700 font-semibold py-2 px-6 rounded-full transition-colors duration-200"
             >
               重選餐廳
             </button>
           </div>
         )}
-
       </div>
+      
+      <ConfirmAdminModal 
+        isOpen={isConfirmModalOpen}
+        onConfirm={handleConfirmContinueAdmin}
+        onCancel={handleCancelContinueAdmin}
+      />
     </div>
   );
 };
