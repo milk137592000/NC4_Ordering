@@ -419,10 +419,10 @@ const App: React.FC = () => {
     votesSnapshot.forEach(voteDoc => batch.delete(voteDoc.ref));
 
     // 修改：重置整個 session 而不是僅更新部分字段
-    // 將 admin 設為 undefined 而不是 null，避免白屏問題
+    // 將 admin 設為 null，並在 renderContent 中處理 admin 為 null 的情況
     batch.set(sessionRef, {
       status: 'ORDERING',
-      admin: undefined,
+      admin: null,
       orderType: null,
       deadline: '',
       proposedRestaurant: null,
@@ -736,8 +736,9 @@ const App: React.FC = () => {
           onSetDeadline={handleSetDeadline}
         />;
       } else {
+        // 修復：處理 sessionData.admin 為 null 的情況
         return <WaitingForProposal 
-          adminName={sessionData.admin.name} 
+          adminName={sessionData.admin?.name || '管理員'} 
           deadline={sessionData.deadline}
           suggestions={suggestions}
           currentUser={currentUser}
@@ -753,7 +754,7 @@ const App: React.FC = () => {
         <ProposalVoteScreen 
           currentUser={currentUser}
           proposedRestaurant={sessionData.proposedRestaurant}
-          adminName={sessionData.admin.name}
+          adminName={sessionData.admin?.name || '管理員'}
           users={todayParticipants}
           votes={votes}
           onVote={handleVote}
