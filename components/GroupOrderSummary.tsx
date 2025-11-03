@@ -27,6 +27,7 @@ const GroupOrderSummary: React.FC<GroupOrderSummaryProps> = ({ orders = [], isAd
   const getOrderStatusChip = (status: Order['status']) => {
     switch (status) {
       case 'submitted':
+        return <span className="text-xs font-semibold text-blue-800 bg-blue-100 px-2 py-1 rounded-full">已提交</span>;
       case 'confirmed':
         return <span className="text-xs font-semibold text-green-800 bg-green-100 px-2 py-1 rounded-full">已確認</span>;
       case 'locked':

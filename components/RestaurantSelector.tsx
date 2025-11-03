@@ -149,8 +149,8 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
               請選擇今日主題。決定後，全員將從同一家店訂購喔！
             </p>
             <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-8 max-w-2xl mx-auto">
-              {renderTypeButton('餐廳', '選餐廳', FoodAndDrinkIcon)}
-              {renderTypeButton('飲料店', '選飲料', DrinkIcon)}
+              {renderTypeButton('餐廳', '餐廳', FoodAndDrinkIcon)}
+              {renderTypeButton('飲料店', '飲料店', DrinkIcon)}
             </div>
           </>
         )}
@@ -279,6 +279,7 @@ const RestaurantSelector: React.FC<RestaurantSelectorProps> = ({
                           ? 'border-2 border-green-500 bg-green-50 scale-[1.02] shadow-md' 
                           : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50/80'
                       }`}
+                      disabled={!deadline || deadlineError}
                     >
                       <h3 className="text-xl font-bold text-stone-800">{restaurant.name}</h3>
                       <p className="text-stone-600">{restaurant.cuisine}</p>
