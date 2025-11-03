@@ -1,7 +1,19 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { onAuthStateChanged, signOut, OAuthProvider, signInWithPopup, type User as FirebaseUser } from 'firebase/auth';
-// FIX: Using namespace import for Firestore to resolve modular SDK usage errors.
-import * as firestore from 'firebase/firestore';
+import { 
+  query, 
+  collection, 
+  onSnapshot, 
+  doc, 
+  setDoc, 
+  writeBatch, 
+  getDocs, 
+  runTransaction,
+  orderBy,
+  where,
+  updateDoc,
+  getDoc
+} from 'firebase/firestore';
 import { auth, db } from './firebase';
 import type {
   Restaurant,
@@ -82,40 +94,39 @@ const App: React.FC = () => {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       const sevenDaysAgoISO = sevenDaysAgo.toISOString();
       
-      // FIX: Use modular Firestore functions
-      const oldSessionsQuery = firestore.query(firestore.collection(db, 'session_history'));
-  
+      // Use modular Firestore functions
+      const oldSessionsQuery = query(collection(db, 'session_history'));
+
       try {
-          // FIX: Use modular Firestore functions
-          const oldSessionsSnapshot = await firestore.getDocs(oldSessionsQuery);
-  
+          // Use modular Firestore functions
+          const oldSessionsSnapshot = await getDocs(oldSessionsQuery);
+
           if (oldSessionsSnapshot.empty) {
               return;
           }
-  
-          // FIX: Use modular Firestore functions
-          const batch = firestore.writeBatch(db);
-  
+
+          // Use modular Firestore functions
+          const batch = writeBatch(db);
+
           for (const sessionDoc of oldSessionsSnapshot.docs) {
               const sessionData = sessionDoc.data();
               if (sessionData.completedAt && sessionData.completedAt < sevenDaysAgoISO) {
-                  const sessionRef = sessionDoc.ref;
+                  // 刪除過期的 session_history 文檔
+                  batch.delete(sessionDoc.ref);
                   
+                  // 刪除相關的子集合（orders, votes, suggestions）
                   const subcollections = ['orders', 'votes', 'suggestions'];
                   for (const sub of subcollections) {
-                      // FIX: Use modular Firestore functions
-                      const subcollectionSnapshot = await firestore.getDocs(firestore.collection(sessionRef, sub));
-                      subcollectionSnapshot.forEach(doc => {
-                          batch.delete(doc.ref);
+                      // Use modular Firestore functions
+                      const subcollectionSnapshot = await getDocs(collection(sessionDoc.ref, sub));
+                      subcollectionSnapshot.forEach(subDoc => {
+                          batch.delete(subDoc.ref);
                       });
                   }
-      
-                  batch.delete(sessionRef);
               }
           }
-  
+
           await batch.commit();
-          
       } catch (error) {
           console.error("清理舊 session 歷史紀錄時發生錯誤:", error);
       }
@@ -145,12 +156,43 @@ const App: React.FC = () => {
 
   // Listen to user mappings for today
   useEffect(() => {
-    // FIX: Use modular Firestore functions
-    const unsub = firestore.onSnapshot(firestore.doc(db, 'userMappings', today), (doc) => {
-      setUserMappings(doc.data() as UserMappings || {});
-    });
+    const unsub = subscribeToUserMappings();
     return () => unsub();
-  }, [today, db]);
+  }, [today]);
+
+  const subscribeToUserMappings = useCallback(() => {
+    if (!today) return () => {};
+    
+    // FIX: Use modular Firestore functions
+    const unsub = onSnapshot(doc(db, 'userMappings', today), (doc) => {
+      if (doc.exists()) {
+        setUserMappings(doc.data() as UserMappings);
+      } else {
+        setUserMappings({});
+      }
+    });
+
+    return unsub;
+  }, [today]);
+
+  const createUserMapping = useCallback(async (user: User) => {
+    if (!today) return;
+    
+    try {
+      // FIX: Use modular Firestore functions
+      const userMappingDocRef = doc(db, 'userMappings', today);
+      
+      // FIX: Use modular Firestore functions
+      await setDoc(userMappingDocRef, {
+        [user.id]: {
+          name: user.name,
+          uid: user.uid
+        }
+      }, { merge: true });
+    } catch (error) {
+      console.error("Error creating user mapping:", error);
+    }
+  }, [today]);
 
   // Set current user from Firebase auth user and update daily participants
   useEffect(() => {
@@ -175,36 +217,47 @@ const App: React.FC = () => {
     }
   }, [fbUser, today, db]);
 
-  // Listen to today's session data
-  useEffect(() => {
-    if (!today) return;
+  const subscribeToSession = useCallback(() => {
+    if (!today || !currentUser) return () => {};
 
     // FIX: Use modular Firestore functions
-    const sessionDocRef = firestore.doc(db, 'sessions', today);
+    const sessionDocRef = doc(db, 'sessions', today);
+    
     // FIX: Use modular Firestore functions
-    const unsubSession = firestore.onSnapshot(sessionDocRef, (doc) => {
-      setSessionData(doc.exists() ? { id: doc.id, ...doc.data() } as SessionData : null);
-    });
-
-    // FIX: Use modular Firestore functions
-    const unsubOrders = firestore.onSnapshot(firestore.collection(sessionDocRef, 'orders'), (snapshot) => {
-      const allOrders: Order[] = snapshot.docs.map(doc => ({ userId: doc.id, ...doc.data() } as Order));
-      setOrders(allOrders);
-    });
-
-    // FIX: Use modular Firestore functions
-    const unsubVotes = firestore.onSnapshot(firestore.collection(sessionDocRef, 'votes'), (snapshot) => {
-      const allVotes: Votes = {};
-      snapshot.forEach(doc => {
-        allVotes[doc.id] = doc.data() as Vote;
-      });
-      setVotes(allVotes);
+    const unsubSession = onSnapshot(sessionDocRef, (doc) => {
+      if (doc.exists()) {
+        setSessionData(doc.data() as SessionData);
+      } else {
+        setSessionData(null);
+      }
     });
     
     // FIX: Use modular Firestore functions
-    const unsubSuggestions = firestore.onSnapshot(firestore.collection(sessionDocRef, 'suggestions'), (snapshot) => {
-        const allSuggestions: Suggestion[] = snapshot.docs.map(doc => doc.data() as Suggestion);
-        setSuggestions(allSuggestions);
+    const unsubOrders = onSnapshot(collection(sessionDocRef, 'orders'), (snapshot) => {
+      const ordersData: Order[] = [];
+      snapshot.forEach((doc) => {
+        ordersData.push({ id: doc.id, ...doc.data() } as Order);
+      });
+      setOrders(ordersData);
+    });
+    
+    // FIX: Use modular Firestore functions
+    const unsubVotes = onSnapshot(collection(sessionDocRef, 'votes'), (snapshot) => {
+      const votesData: Votes = {};
+      snapshot.forEach((doc) => {
+        const voteData = doc.data() as Vote;
+        votesData[doc.id] = voteData;
+      });
+      setVotes(votesData);
+    });
+    
+    // FIX: Use modular Firestore functions
+    const unsubSuggestions = onSnapshot(collection(sessionDocRef, 'suggestions'), (snapshot) => {
+      const suggestionsData: Suggestion[] = [];
+      snapshot.forEach((doc) => {
+        suggestionsData.push({ id: doc.id, ...doc.data() } as Suggestion);
+      });
+      setSuggestions(suggestionsData);
     });
 
     return () => {
@@ -213,7 +266,7 @@ const App: React.FC = () => {
       unsubVotes();
       unsubSuggestions();
     };
-  }, [today, db]);
+  }, [today, currentUser]);
 
   const clearSessionData = useCallback(async () => {
     // FIX: Use modular Firestore functions
@@ -338,39 +391,43 @@ const App: React.FC = () => {
   }, [fbUser, today, db]);
 
   const handleHardReset = useCallback(async () => {
-    console.log("Initiating partial reset: clearing orders and logging out users...");
-    if (!sessionData) {
-      alert("沒有進行中的訂餐，無法重置。");
-      return;
-    }
-    
+    if (!today) return;
+
     try {
-        // FIX: Use modular Firestore functions
-        const batch = firestore.writeBatch(db);
-        // FIX: Use modular Firestore functions
-        const sessionDocRef = firestore.doc(db, 'sessions', today);
-        // FIX: Use modular Firestore functions
-        const userMappingsDocRef = firestore.doc(db, 'userMappings', today);
+      // FIX: Use modular Firestore functions
+      const sessionDocRef = doc(db, 'sessions', today);
+      const userMappingsDocRef = doc(db, 'userMappings', today);
 
-        // FIX: Use modular Firestore functions
-        const ordersSnapshot = await firestore.getDocs(firestore.collection(sessionDocRef, 'orders'));
-        if (!ordersSnapshot.empty) {
-            ordersSnapshot.forEach(doc => batch.delete(doc.ref));
-        }
+      // Clear session document and subcollections
+      const batch = writeBatch(db);
 
-        batch.delete(userMappingsDocRef);
-        
-        await batch.commit();
-        console.log("Orders and user mappings cleared for today.");
-        
-        await signOut(auth);
-        
-        alert('已清空所有訂單並登出所有人員。');
+      // Delete session document
+      batch.delete(sessionDocRef);
+
+      // Reset userMappings
+      batch.set(userMappingsDocRef, {});
+
+      // Get subcollections
+      const ordersSnapshot = await getDocs(collection(sessionDocRef, 'orders'));
+      ordersSnapshot.forEach(orderDoc => batch.delete(orderDoc.ref));
+
+      const votesSnapshot = await getDocs(collection(sessionDocRef, 'votes'));
+      votesSnapshot.forEach(voteDoc => batch.delete(voteDoc.ref));
+
+      const suggestionsSnapshot = await getDocs(collection(sessionDocRef, 'suggestions'));
+      suggestionsSnapshot.forEach(suggestionDoc => batch.delete(suggestionDoc.ref));
+
+      await batch.commit();
+
+      // Sign out all users
+      await signOut(auth);
+
+      alert('已清空所有訂單並登出所有人員。');
     } catch (error) {
-        console.error("Reset failed:", error);
-        alert("重置失败，请检查控制台错误。");
+      console.error("Error performing hard reset:", error);
+      alert("重置失败，请检查控制台错误。");
     }
-  }, [today, sessionData, db]);
+  }, [today, db]);
 
   const handleVolunteer = useCallback(async () => {
     if (!currentUser) return;
@@ -663,7 +720,54 @@ const App: React.FC = () => {
       await firestore.setDoc(firestore.doc(db, 'sessions', today, 'suggestions', currentUser.id), suggestion);
       setIsSuggestionModalOpen(false);
   }, [currentUser, today, db]);
-  
+
+  const initializeSession = useCallback(async (restaurant: Restaurant) => {
+    if (!today || !currentUser) return;
+    
+    try {
+      // FIX: Use modular Firestore functions
+      const sessionDocRef = doc(db, 'sessions', today);
+      
+      // FIX: Use modular Firestore functions
+      const batch = writeBatch(db);
+      
+      // 獲取現有的orders、votes和suggestions數據
+      const collectionsToFetch = ['orders', 'votes', 'suggestions'];
+      const existingData: Record<string, any[]> = {};
+      
+      for (const coll of collectionsToFetch) {
+        // FIX: Use modular Firestore functions
+        const snapshot = await getDocs(collection(sessionDocRef, coll));
+        existingData[coll] = [];
+        snapshot.forEach((doc) => {
+          existingData[coll].push({ id: doc.id, ...doc.data() });
+        });
+      }
+      
+      // 初始化session文檔
+      batch.set(sessionDocRef, {
+        date: today,
+        restaurant: restaurant,
+        deadline: '',
+        admin: currentUser,
+        status: 'proposal',
+        ...(sessionData || {}) // 保留現有的sessionData（如果有的話）
+      }, { merge: true });
+      
+      // 重新創建現有的子文檔
+      Object.entries(existingData).forEach(([collectionName, docs]) => {
+        docs.forEach((doc) => {
+          const docRef = doc(db, 'sessions', today, collectionName, doc.id);
+          batch.set(docRef, doc, { merge: true });
+        });
+      });
+      
+      await batch.commit();
+    } catch (error) {
+      console.error("Error initializing session:", error);
+    }
+  }, [today, currentUser, sessionData]);
+
   const renderContent = () => {
     if (isLoading) {
       return <div className="flex justify-center items-center h-screen"><p>正在載入...</p></div>;
