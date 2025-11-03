@@ -419,10 +419,10 @@ const App: React.FC = () => {
     votesSnapshot.forEach(voteDoc => batch.delete(voteDoc.ref));
 
     // 修改：重置整個 session 而不是僅更新部分字段
-    // 這樣管理員就不再是管理員
+    // 將 admin 設為 undefined 而不是 null，避免白屏問題
     batch.set(sessionRef, {
       status: 'ORDERING',
-      admin: null,
+      admin: undefined,
       orderType: null,
       deadline: '',
       proposedRestaurant: null,
