@@ -418,20 +418,32 @@ const App: React.FC = () => {
     const votesSnapshot = await firestore.getDocs(firestore.collection(sessionRef, 'votes'));
     votesSnapshot.forEach(voteDoc => batch.delete(voteDoc.ref));
 
-    // 修改：重置整個 session 而不是僅更新部分字段
-    // 將 admin 設為 null，並在 renderContent 中處理 admin 為 null 的情況
-    batch.set(sessionRef, {
-      status: 'ORDERING',
-      admin: null,
-      orderType: null,
-      deadline: '',
-      proposedRestaurant: null,
-      isProposalRejected: false,
-      createdAt: new Date().toISOString(),
-    });
+    // 修改：保留當前用戶作為管理員，避免白屏問題
+    if (currentUser) {
+      batch.set(sessionRef, {
+        status: 'ORDERING',
+        admin: { id: currentUser.id, name: currentUser.name, role: 'admin' },
+        orderType: null,
+        deadline: '',
+        proposedRestaurant: null,
+        isProposalRejected: false,
+        createdAt: new Date().toISOString(),
+      });
+    } else {
+      // 如果沒有當前用戶，才設置為 null（雖然這種情況應該不會發生）
+      batch.set(sessionRef, {
+        status: 'ORDERING',
+        admin: null,
+        orderType: null,
+        deadline: '',
+        proposedRestaurant: null,
+        isProposalRejected: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
     
     await batch.commit();
-  }, [today, db]);
+  }, [today, db, currentUser]);
   
   const handleBackToRestaurantSelection = useCallback(() => handleCancelProposal(), [handleCancelProposal]);
 
@@ -724,6 +736,17 @@ const App: React.FC = () => {
     }
 
     if (!sessionData.proposedRestaurant) {
+      // 修復：處理 sessionData.admin 為 null 的情況
+      if (sessionData.admin === null) {
+        // 如果 admin 為 null，顯示 VolunteerAdminScreen
+        return <VolunteerAdminScreen 
+          currentUser={currentUser} 
+          onVolunteer={handleVolunteer} 
+          suggestions={suggestions}
+          onOpenSuggestionModal={() => setIsSuggestionModalOpen(true)}
+        />;
+      }
+      
       if (isAdmin) {
         return <RestaurantSelector
           restaurants={restaurants}
@@ -736,9 +759,8 @@ const App: React.FC = () => {
           onSetDeadline={handleSetDeadline}
         />;
       } else {
-        // 修復：處理 sessionData.admin 為 null 的情況
         return <WaitingForProposal 
-          adminName={sessionData.admin?.name || '管理員'} 
+          adminName={sessionData.admin.name} 
           deadline={sessionData.deadline}
           suggestions={suggestions}
           currentUser={currentUser}
@@ -754,7 +776,8 @@ const App: React.FC = () => {
         <ProposalVoteScreen 
           currentUser={currentUser}
           proposedRestaurant={sessionData.proposedRestaurant}
-          adminName={sessionData.admin?.name || '管理員'}
+          // 修復：處理 sessionData.admin 為 null 的情況
+          adminName={sessionData.admin && sessionData.admin.name ? sessionData.admin.name : '管理員'}
           users={todayParticipants}
           votes={votes}
           onVote={handleVote}
