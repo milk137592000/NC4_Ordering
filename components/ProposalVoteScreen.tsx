@@ -30,7 +30,7 @@ const ProposalVoteScreen: React.FC<ProposalVoteScreenProps> = ({
   const waitingCount = colleagues.length - disagreeCount - agreeCount;
 
   // 檢查是否達到決策條件
-  const isAgreed = agreeCount >= 3;
+  const isAgreed = agreeCount >= 2;
   const isDisagreed = disagreeCount >= 2;
 
   const handleCancelProposalClick = () => {
